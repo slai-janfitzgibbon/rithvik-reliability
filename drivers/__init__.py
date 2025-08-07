@@ -6,14 +6,12 @@ All drivers follow consistent patterns and provide comprehensive functionality.
 Supports multiple instances of the same instrument type with unique IDs.
 """
 
-# Import all available drivers
 from .dfb13tk import DFB13TK, DFBMeasurement, DFBSweepConfig
 from .pm101 import ThorlabsPowerMeter, Thorlabs_PMxxx, PowerMeterMeasurement, PowerMeterMonitorConfig
 from .smu import AimTTi_SMU4000, SMUSweepConfig, SMUMeasurement
 from .tti_qlp355 import TTi_QL355TP, PSUSweepConfig, PSUChannelMeasurement
 from typing import Dict, List, Any, Optional
 
-# Driver registry for easy access
 AVAILABLE_DRIVERS = {
     'dfb13tk': {
         'class': DFB13TK,
@@ -87,7 +85,6 @@ class MultiInstrumentManager:
         driver_class = driver_info['class']
         
         try:
-            # For drivers that support unit_id, pass it
             if driver_info['supports_multiple'] and 'unit_id' not in kwargs:
                 kwargs['unit_id'] = unit_id
                 
@@ -179,7 +176,6 @@ def create_production_setup() -> MultiInstrumentManager:
     """
     manager = MultiInstrumentManager()
     
-    # Production hardware addresses
     production_config = {
         'SMU1': ('smu', 'TCPIP::10.11.83.58::INSTR'),
         'SMU2': ('smu', 'TCPIP::10.11.83.60::INSTR'),
@@ -206,7 +202,6 @@ def create_example_setup() -> MultiInstrumentManager:
     """
     manager = MultiInstrumentManager()
     
-    # Example addresses for reference
     example_config = {
         'SMU1': ('smu', 'TCPIP::10.11.83.58::INSTR'),
         'SMU2': ('smu', 'TCPIP::10.11.83.60::INSTR'),

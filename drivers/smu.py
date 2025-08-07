@@ -47,7 +47,6 @@ class AimTTi_SMU4000:
         self.instrument.write_termination = '\n'
         self.instrument.timeout = 10000  # 10 second timeout
         
-        # Initialize state tracking
         self.current_mode = "UNKNOWN"
         self.output_enabled = False
         self.last_measurement = None
@@ -167,7 +166,6 @@ class AimTTi_SMU4000:
         except:
             return self.output_enabled
 
-    # Measurement Functions
     def measure_voltage(self) -> float:
         """Measure voltage"""
         return float(self.instrument.query("MEAS:VOLT?"))
@@ -311,7 +309,6 @@ class AimTTi_SMU4000:
             compliance_limit=max(abs(current_range[0]), abs(current_range[1]))
         )
         
-        # Current sweep configuration  
         i_config = SMUSweepConfig(
             start_value=current_range[0],
             stop_value=current_range[1],
@@ -320,12 +317,10 @@ class AimTTi_SMU4000:
             compliance_limit=max(abs(voltage_range[0]), abs(voltage_range[1]))
         )
         
-        # Perform both sweeps
         v_sweep_data = self.voltage_sweep(v_config)
         time.sleep(1.0)  # Brief pause between sweeps
         i_sweep_data = self.current_sweep(i_config)
         
-        # Combine data
         combined_df = pd.concat([v_sweep_data, i_sweep_data], ignore_index=True)
         combined_df['characterization_type'] = 'iv_complete'
         
@@ -350,12 +345,10 @@ class AimTTi_SMU4000:
         df = pd.DataFrame([m.to_dict() for m in measurements])
         df['unit_id'] = self.unit_id
         
-        # Add derived columns that are useful for analysis
         df['power_mw'] = df['measured_power'] * 1000
         df['current_ma'] = df['measured_current'] * 1000
         df['resistance_kohm'] = df['measured_resistance'] / 1000
         
-        # Add time-based indexing
         df['measurement_index'] = range(len(df))
         
         return df

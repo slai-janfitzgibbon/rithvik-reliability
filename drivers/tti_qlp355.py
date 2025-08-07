@@ -78,11 +78,9 @@ class TTi_QL355TP:
         self.enable_output(2, False)
         time.sleep(0.1)
         
-        # Reset instrument
         self.instrument.write("*RST")
         time.sleep(0.5)
         
-        # Update state tracking
         for channel in [1, 2]:
             self.channel_states[channel] = {'enabled': False, 'voltage': 0.0, 'current_limit': 0.0}
 
@@ -90,7 +88,6 @@ class TTi_QL355TP:
         """Get any system errors"""
         errors = []
         try:
-            # Try to get error queue (if supported)
             while True:
                 try:
                     error = self.instrument.query("SYST:ERR?").strip()
@@ -108,7 +105,6 @@ class TTi_QL355TP:
         if channel not in [1, 2]:
             raise ValueError(f"Channel must be 1 or 2, got {channel}")
 
-    # Voltage Control
     def set_voltage(self, channel: int, voltage: float):
         """Set channel voltage"""
         self._validate_channel(channel)
@@ -133,7 +129,6 @@ class TTi_QL355TP:
         response = self.instrument.query(f"V{channel}O?")
         return float(response)
 
-    # Current Control
     def set_current_limit(self, channel: int, current: float):
         """Set channel current limit"""
         self._validate_channel(channel)
@@ -158,7 +153,6 @@ class TTi_QL355TP:
         response = self.instrument.query(f"I{channel}O?")
         return float(response)
 
-    # Output Control
     def enable_output(self, channel: int, enable: bool):
         """Enable/disable channel output"""
         self._validate_channel(channel)
@@ -183,7 +177,6 @@ class TTi_QL355TP:
         for channel in [1, 2]:
             self.enable_output(channel, enable)
 
-    # Advanced Measurement Functions
     def measure_power(self, channel: int) -> float:
         """Measure channel power (V * I)"""
         voltage = self.get_output_voltage(channel)
@@ -193,14 +186,11 @@ class TTi_QL355TP:
     def get_channel_mode(self, channel: int) -> Dict[str, bool]:
         """Get channel operating mode (CV/CC)"""
         self._validate_channel(channel)
-        # This would need actual instrument queries for real implementation
-        # For now, estimate based on measurements
         voltage = self.get_output_voltage(channel)
         current = self.get_output_current(channel)
         set_voltage = self.get_set_voltage(channel)
         current_limit = self.get_set_current_limit(channel)
         
-        # Simple heuristic - if current is at limit, likely in CC mode
         in_cc_mode = abs(current - current_limit) < 0.01
         in_cv_mode = not in_cc_mode
         
@@ -216,20 +206,16 @@ class TTi_QL355TP:
         self._validate_channel(channel)
         timestamp = datetime.now().isoformat()
         
-        # Get settings
         set_voltage = self.get_set_voltage(channel)
         set_current_limit = self.get_set_current_limit(channel)
         
-        # Get measurements
         measured_voltage = self.get_output_voltage(channel)
         measured_current = self.get_output_current(channel)
         measured_power = measured_voltage * measured_current
         
-        # Get states
         output_enabled = self.get_output_state(channel)
         channel_mode = self.get_channel_mode(channel)
         
-        # Create measurement
         measurement = PSUChannelMeasurement(
             timestamp=timestamp,
             channel=channel,
@@ -257,7 +243,6 @@ class TTi_QL355TP:
             measurements[channel] = self.measure_channel_all(channel)
         return measurements
 
-    # Sweep Operations
     def voltage_sweep(self, config: PSUSweepConfig) -> pd.DataFrame:
         """
         Perform voltage sweep on specified channel
@@ -269,10 +254,8 @@ class TTi_QL355TP:
         
         self._validate_channel(config.channel)
         
-        # Set current limit
         self.set_current_limit(config.channel, config.current_limit)
         
-        # Generate sweep points
         if config.log_scale:
             if config.start_voltage <= 0 or config.stop_voltage <= 0:
                 raise ValueError("Log scale requires positive start and stop voltages")
@@ -288,7 +271,6 @@ class TTi_QL355TP:
                 self.set_voltage(config.channel, voltage)
                 time.sleep(config.step_delay)
                 
-                # Allow extra settling for measurement
                 if config.measure_settling_time > 0:
                     time.sleep(config.measure_settling_time)
                 
@@ -300,7 +282,6 @@ class TTi_QL355TP:
         finally:
             self.enable_output(config.channel, False)
         
-        # Convert to DataFrame
         df = pd.DataFrame([m.to_dict() for m in measurements])
         df['unit_id'] = self.unit_id
         df['sweep_type'] = 'voltage'
@@ -344,7 +325,6 @@ class TTi_QL355TP:
         finally:
             self.enable_output(channel, False)
         
-        # Convert to DataFrame
         df = pd.DataFrame([m.to_dict() for m in measurements])
         df['unit_id'] = self.unit_id
         df['test_type'] = 'load_regulation'
@@ -365,21 +345,17 @@ class TTi_QL355TP:
         
         measurements = []
         
-        # Set current limits for both channels
         for channel in [1, 2]:
             self.set_current_limit(channel, current_limit)
         
-        # Enable both outputs
         self.enable_all_outputs(True)
         
         try:
             for i, voltage in enumerate(voltage_steps):
-                # Set both channels to same voltage
                 self.set_voltage(1, voltage)
                 self.set_voltage(2, voltage)
                 time.sleep(step_delay)
                 
-                # Measure both channels
                 ch1_measurement = self.measure_channel_all(1)
                 ch2_measurement = self.measure_channel_all(2)
                 
@@ -390,7 +366,6 @@ class TTi_QL355TP:
         finally:
             self.enable_all_outputs(False)
         
-        # Convert to DataFrame
         df = pd.DataFrame([m.to_dict() for m in measurements])
         df['unit_id'] = self.unit_id
         df['test_type'] = 'dual_channel_tracking'
@@ -417,7 +392,6 @@ class TTi_QL355TP:
         df = pd.DataFrame([m.to_dict() for m in measurements])
         df['unit_id'] = self.unit_id
         
-        # Add derived columns useful for analysis
         df['power_mw'] = df['measured_power'] * 1000
         df['current_ma'] = df['measured_current'] * 1000
         df['voltage_error_mv'] = (df['measured_voltage'] - df['set_voltage']) * 1000
@@ -425,7 +399,6 @@ class TTi_QL355TP:
                                            df['measured_voltage'] / df['measured_current'], 
                                            np.inf)
         
-        # Add time-based indexing
         df['measurement_index'] = range(len(df))
         
         return df
@@ -435,7 +408,6 @@ class TTi_QL355TP:
         try:
             errors = self.get_errors()
             
-            # Get status for both channels
             channels_status = {}
             for channel in [1, 2]:
                 measurement = self.measure_channel_all(channel)
@@ -473,7 +445,6 @@ class TTi_QL355TP:
     def disconnect(self):
         """Safely disconnect PSU"""
         try:
-            # Disable all outputs for safety
             self.enable_all_outputs(False)
             time.sleep(0.1)
             self.instrument.close()

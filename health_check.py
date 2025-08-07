@@ -1,28 +1,12 @@
-#!/usr/bin/env python3
-"""
-FAU Production Test System - Health Check Script
-
-Comprehensive health check for all instrument drivers and system components.
-Tests connectivity, basic functionality, and safety states of all instruments.
-
-Usage:
-    python health_check.py [--quick] [--verbose] [--config CONFIG_FILE]
-
-Options:
-    --quick     Run quick connectivity tests only (skip extended tests)
-    --verbose   Enable detailed output for debugging
-    --config    Use custom configuration file (default: auto-detect)
-"""
 
 import sys
 import time
 import json
 import argparse
 from datetime import datetime
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List
 from contextlib import contextmanager
 
-# Import all drivers
 from drivers.dfb13tk import DFB13TK
 from drivers.pm101 import ThorlabsPowerMeter
 from drivers.smu import AimTTi_SMU4000
@@ -37,7 +21,6 @@ class HealthCheckResult:
         self.timestamp = datetime.now()
 
 class InstrumentHealthChecker:
-    """Comprehensive health check system for FAU production test instruments."""
     
     def __init__(self, config: Dict = None, verbose: bool = False):
         self.verbose = verbose
@@ -45,32 +28,31 @@ class InstrumentHealthChecker:
         self.config = config or self._get_default_config()
         
     def _get_default_config(self) -> Dict:
-        """Default production configuration."""
         return {
             'instruments': {
                 'SMU1': {
                     'driver': 'smu',
-                    'address': 'TCPIP::10.11.83.58::5025::SOCKET',
+                    'address': 'TCPIP::10.11.83.58::INSTR',
                     'unit_id': 'SMU1',
-                    'timeout': 20.0
+                    'timeout': 10.0
                 },
                 'SMU2': {
                     'driver': 'smu', 
-                    'address': 'TCPIP::10.11.83.60::5025::SOCKET',
+                    'address': 'TCPIP::10.11.83.60::INSTR',
                     'unit_id': 'SMU2',
-                    'timeout': 20.0
+                    'timeout': 10.0
                 },
                 'PSU1': {
                     'driver': 'psu',
-                    'address': 'TCPIP::10.11.83.57::9221::SOCKET',
+                    'address': 'TCPIP::10.11.83.57::INSTR', 
                     'unit_id': 'PSU1',
-                    'timeout': 20.0
+                    'timeout': 5.0
                 },
                 'PSU2': {
                     'driver': 'psu',
-                    'address': 'TCPIP::10.11.83.52::9221::SOCKET',
+                    'address': 'TCPIP::10.11.83.52::INSTR',
                     'unit_id': 'PSU2', 
-                    'timeout': 20.0
+                    'timeout': 5.0
                 },
                 'PM1': {
                     'driver': 'pm',
@@ -87,7 +69,7 @@ class InstrumentHealthChecker:
                 'LASER': {
                     'driver': 'laser',
                     'address': 'COM3',
-                    'timeout': 20.0
+                    'timeout': 5.0
                 }
             },
             'test_parameters': {
@@ -101,19 +83,16 @@ class InstrumentHealthChecker:
         }
     
     def log(self, message: str):
-        """Log message if verbose mode enabled."""
         if self.verbose:
             print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
     
     def add_result(self, name: str, success: bool, message: str, details: Dict = None):
-        """Add test result to results list."""
         result = HealthCheckResult(name, success, message, details)
         self.results.append(result)
         return result
     
     @contextmanager
     def safe_instrument_context(self, instrument_class, *args, **kwargs):
-        """Safe context manager for instrument connections."""
         instrument = None
         try:
             instrument = instrument_class(*args, **kwargs)
@@ -139,20 +118,16 @@ class InstrumentHealthChecker:
         
         try:
             with self.safe_instrument_context(DFB13TK, config['address']) as laser:
-                # Test basic connectivity
                 serial_num = laser.get_serial_number()
                 firmware = laser.get_firmware_version()
                 
-                # Test state reading
                 laser_state = laser.get_laser_state()
                 current = laser.get_current()
                 temperature = laser.get_temperature()
                 
-                # Test safe parameter setting
                 test_temp = self.config['test_parameters']['laser_safe_temp']
                 laser.set_temperature(test_temp)
                 
-                # Verify laser is OFF (safety check)
                 if laser_state == 60:  # Laser is ON
                     laser.laser_off()
                     time.sleep(0.5)
@@ -183,18 +158,14 @@ class InstrumentHealthChecker:
         
         try:
             with self.safe_instrument_context(ThorlabsPowerMeter, config['address'], True, config['unit_id']) as pm:
-                # Test basic connectivity
                 idn = pm.get_idn()
                 
-                # Set wavelength
                 wavelength = self.config['test_parameters']['pm_wavelength']
                 pm.set_wavelength(wavelength)
                 
-                # Test power reading
                 power_w = pm.read_power()
                 power_dbm = pm.read_power_dbm()
                 
-                # Get calibration info
                 cal_msg = pm.get_calibration_message()
                 
                 status = pm.get_status()
@@ -223,22 +194,17 @@ class InstrumentHealthChecker:
         
         try:
             with self.safe_instrument_context(AimTTi_SMU4000, config['address'], config['unit_id']) as smu:
-                # Test basic connectivity
                 idn = smu.get_idn()
                 
-                # Check for errors
                 errors = smu.get_errors()
                 if errors:
                     smu.clear_errors()
                 
-                # Test mode setting
                 smu.set_mode_source_voltage()
                 mode = smu.get_source_mode()
                 
-                # Verify output is disabled (safety)
                 output_state = smu.get_output_state()
                 
-                # Test measurement (with output disabled)
                 voltage = smu.measure_voltage()
                 current = smu.measure_current()
                 
@@ -270,20 +236,16 @@ class InstrumentHealthChecker:
         
         try:
             with self.safe_instrument_context(TTi_QL355TP, config['address'], config['unit_id']) as psu:
-                # Test basic connectivity
                 idn = psu.get_idn()
                 
-                # Check both channels
                 ch1_state = psu.get_output_state(1)
                 ch2_state = psu.get_output_state(2)
                 
-                # Get voltage/current settings
                 ch1_voltage = psu.get_set_voltage(1)
                 ch2_voltage = psu.get_set_voltage(2)
                 ch1_current = psu.get_set_current_limit(1)
                 ch2_current = psu.get_set_current_limit(2)
                 
-                # Measure output (should be 0V if disabled)
                 ch1_output_v = psu.get_output_voltage(1)
                 ch2_output_v = psu.get_output_voltage(2)
                 
@@ -306,7 +268,6 @@ class InstrumentHealthChecker:
                     'status': status
                 }
                 
-                # Both outputs should be disabled for safety
                 success = not ch1_state and not ch2_state
                 message = f"PSU {name} functional ({idn.split(',')[1].strip()} if available)"
                 if ch1_state or ch2_state:
@@ -318,7 +279,6 @@ class InstrumentHealthChecker:
             return self.add_result(f"PSU_{name}", False, f"Failed: {e}")
     
     def run_quick_check(self) -> List[HealthCheckResult]:
-        """Run quick connectivity test on all instruments."""
         self.log("Starting quick health check...")
         self.results.clear()
         
@@ -337,13 +297,9 @@ class InstrumentHealthChecker:
         return self.results
     
     def run_full_check(self) -> List[HealthCheckResult]:
-        """Run comprehensive health check including extended tests."""
-        # For now, full check is same as quick check
-        # Could be extended with more thorough testing
         return self.run_quick_check()
     
     def print_summary(self):
-        """Print comprehensive test summary."""
         if not self.results:
             print("No test results available.")
             return
@@ -362,7 +318,6 @@ class InstrumentHealthChecker:
         print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
         print("="*60)
         
-        # Print individual results
         for result in self.results:
             status = "PASS" if result.success else "FAIL"
             print(f"[{status}] {result.name}: {result.message}")
@@ -386,7 +341,6 @@ class InstrumentHealthChecker:
         print("="*60)
     
     def export_results(self, filename: str = None):
-        """Export results to JSON file."""
         if filename is None:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f"health_check_{timestamp}.json"
@@ -415,7 +369,6 @@ class InstrumentHealthChecker:
 
 
 def main():
-    """Main health check execution."""
     parser = argparse.ArgumentParser(description='FAU Production Test System Health Check')
     parser.add_argument('--quick', action='store_true', 
                        help='Run quick connectivity tests only')
@@ -428,7 +381,6 @@ def main():
     
     args = parser.parse_args()
     
-    # Load configuration if provided
     config = None
     if args.config:
         try:
@@ -438,10 +390,8 @@ def main():
             print(f"Failed to load configuration file: {e}")
             sys.exit(1)
     
-    # Create health checker
     checker = InstrumentHealthChecker(config=config, verbose=args.verbose)
     
-    # Run tests
     print("FAU Production Test System - Health Check")
     print("Starting instrument health check...")
     
@@ -451,14 +401,11 @@ def main():
         else:
             results = checker.run_full_check()
         
-        # Print summary
         checker.print_summary()
         
-        # Export if requested
         if args.export:
             checker.export_results(args.export)
         
-        # Exit with appropriate code
         failed_count = sum(1 for r in results if not r.success)
         sys.exit(0 if failed_count == 0 else 1)
         

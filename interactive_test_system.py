@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 
 import os
 import sys
@@ -19,13 +18,11 @@ class InteractiveTestSystem:
         self.test_history = []
         self.data_manager = DataManager()
         
-        # Setup logging
         logging.basicConfig(
             level=logging.INFO,
             format='[%(asctime)s] %(levelname)s: %(message)s'
         )
         
-        # Load previous session data and preferences
         self.load_session_data()
         self.data_manager.load_preferences()
     
@@ -138,9 +135,9 @@ class InteractiveTestSystem:
             if self.manager.add_instrument(unit_id, driver_type, address):
                 self.instruments[unit_id] = self.manager.get_instrument(unit_id)
                 success_count += 1
-                print("✓ Connected")
+                print("Connected")
             else:
-                print("✗ Failed")
+                print("Failed")
         
         print(f"\nConnection Results: {success_count}/7 instruments connected")
         
@@ -149,7 +146,7 @@ class InteractiveTestSystem:
             if not self.get_yes_no("Continue with limited instruments?", "n"):
                 return False
         
-        print("✓ Instrument setup complete")
+        print("Instrument setup complete")
         return True
     
     def setup_test_session(self) -> Dict[str, Any]:
@@ -158,7 +155,6 @@ class InteractiveTestSystem:
         print("TEST SESSION SETUP")
         print("="*60)
         
-        # Check if this is a rerun
         is_rerun = False
         if self.test_history:
             print("Previous test records found.")
@@ -171,7 +167,6 @@ class InteractiveTestSystem:
                     print(f"Found previous test: {previous_test['device_id']}")
                     print(f"Previous result: {previous_test.get('result', 'Unknown')}")
         
-        # Get test information
         session_info = {}
         
         if is_rerun and previous_test:
@@ -183,7 +178,6 @@ class InteractiveTestSystem:
             session_info['run_type'] = 'new'
             session_info['rerun_count'] = 0
         
-        # Device information
         print("\nDevice Information:")
         session_info['device_id'] = self.get_user_input(
             "Device ID", 
@@ -193,22 +187,19 @@ class InteractiveTestSystem:
         session_info['operator'] = self.get_user_input("Operator name", "Production_User")
         session_info['workstation'] = self.get_user_input("Workstation ID", "TestStation_1")
         
-        # Batch information
         print("\nBatch Information:")
         session_info['dut_family'] = self.get_user_input("DUT Family", session_info.get('dut_family', "FAU_Device"))
         session_info['dut_batch'] = self.get_user_input("Batch ID", session_info.get('dut_batch', f"BATCH_{datetime.now().strftime('%Y%m%d')}"))
         session_info['dut_lot'] = self.get_user_input("Lot ID", session_info.get('dut_lot', "LOT_001"))
         session_info['dut_wafer'] = self.get_user_input("Wafer ID", session_info.get('dut_wafer', "W001"))
         
-        # Test parameters
         print("\nTest Parameters:")
         device_count = int(self.get_user_input("Number of devices on sample", "2"))
         session_info['device_count'] = device_count
         
         if device_count < 4:
-            print("ℹ️  With <4 devices, FAU alignment will be performed via IV sweep")
+            print("INFO: With <4 devices, FAU alignment will be performed via IV sweep")
         
-        # Environment information
         print("\nEnvironment Information:")
         session_info['environment'] = {
             'temperature': float(self.get_user_input("Environment temperature (°C)", "22.0")),
@@ -216,12 +207,10 @@ class InteractiveTestSystem:
             'location': self.get_user_input("Test location", "Production_Lab")
         }
         
-        # Data saving preferences
         print("\nData Saving Setup:")
         session_info['log_data'] = self.get_yes_no("Save test data?", "y")
         
         if session_info['log_data']:
-            # Configure data saving preferences
             if self.get_yes_no("Configure data saving options?", "y"):
                 configure_choice = self.get_user_input(
                     "Choose configuration method", "preset", 
@@ -236,21 +225,17 @@ class InteractiveTestSystem:
                 else:  # preset
                     session_info['data_preferences'] = self.data_manager.select_preset()
                 
-                # Save preferences for future use
                 if self.get_yes_no("Save these preferences for future tests?", "y"):
                     self.data_manager.save_preferences()
             else:
-                # Use current preferences without modification
                 session_info['data_preferences'] = self.data_manager.preferences
             
-            # Generate directory structure
             session_info['data_paths'] = self.data_manager.create_data_structure(
                 session_info['device_id'], 
                 session_info['operator'],
                 session_info['timestamp']
             )
             
-            # Show what will be saved
             save_summary = self.data_manager.get_save_summary(session_info['data_paths'])
             print(f"\n{save_summary}")
         else:
@@ -258,7 +243,6 @@ class InteractiveTestSystem:
             session_info['data_preferences'] = None
             session_info['data_paths'] = None
         
-        # Multiple runs
         print("\nRun Configuration:")
         if self.get_yes_no("Plan multiple test runs?"):
             session_info['planned_runs'] = int(self.get_user_input("Number of planned runs", "1"))
@@ -339,7 +323,6 @@ class InteractiveTestSystem:
         print("EXECUTING TEST SEQUENCE")
         print("="*60)
         
-        # Initialize recorder if logging enabled
         if session_info['log_data']:
             data_dir = session_info['data_paths']['base']
             self.recorder = UniversalRecorder(data_dir)
@@ -356,7 +339,6 @@ class InteractiveTestSystem:
         
         test_results = {}
         
-        # Step 1: Sample placement reminder
         print("\n📋 STEP 1: Sample Placement")
         print("Please ensure:")
         print("- Sample is placed on chuck")
@@ -365,7 +347,6 @@ class InteractiveTestSystem:
         
         input("Press Enter when sample placement is complete...")
         
-        # Step 2: FAU Alignment (if needed)
         if session_info['device_count'] < 4:
             print(f"\n📋 STEP 2: FAU Alignment (Device count: {session_info['device_count']})")
             print("Performing IV sweep for FAU alignment...")
@@ -383,9 +364,8 @@ class InteractiveTestSystem:
                 print("FAILED: FAU alignment failed!")
                 return {'success': False, 'error': 'FAU alignment failed'}
             else:
-                print("✅ FAU alignment complete")
+                print("FAU alignment complete")
         
-        # Step 3: Laser Power Sweep
         step_num = 3 if session_info['device_count'] < 4 else 2
         print(f"\n📋 STEP {step_num}: Laser Power Sweep")
         print("Performing laser power characterization...")
@@ -400,7 +380,6 @@ class InteractiveTestSystem:
         test_results['laser_sweep'] = sweep_result
         
         if session_info['log_data'] and sweep_result['success']:
-            # Record data
             import pandas as pd
             df = pd.DataFrame(sweep_result['measurements'])
             
@@ -425,9 +404,8 @@ class InteractiveTestSystem:
             print("FAILED: Laser power sweep failed!")
             return {'success': False, 'error': 'Laser power sweep failed'}
         else:
-            print("✅ Laser power sweep complete")
+            print("Laser power sweep complete")
         
-        # Finalize test
         if session_info['log_data']:
             self.recorder.run_end()
         
@@ -453,7 +431,6 @@ class InteractiveTestSystem:
                 measurement = smu.measure_all()
                 measurements.append(measurement)
                 
-                # Simple progress indication
                 if int(voltage * 10) % 10 == 0:
                     print(f"  Voltage: {voltage:.1f}V, Current: {measurement.measured_current*1000:.3f}mA")
             
@@ -483,12 +460,10 @@ class InteractiveTestSystem:
             return {'success': False, 'error': f'Missing instruments: {", ".join(missing)}'}
         
         try:
-            # Setup laser
             laser.set_temperature(25.0)
             laser.wait_temperature_stable(timeout=30)
             laser.laser_on()
             
-            # Setup power meters
             pm1.set_wavelength(1310)
             pm1.set_power_unit("W")
             pm1.set_auto_range(True)
@@ -521,7 +496,6 @@ class InteractiveTestSystem:
                 
                 measurements.append(combined_data)
                 
-                # Progress indication
                 if int((current_ma - 15) * 10) % 10 == 0:
                     print(f"    {current_ma:.1f}mA: CH3={pm1_measurement.power_mw:.3f}mW, CH4={pm2_measurement.power_mw:.3f}mW")
                 
@@ -579,7 +553,6 @@ class InteractiveTestSystem:
             
             print(f"Saved: {', '.join(saved_items)}")
         
-        # Add to test history
         history_record = {
             'device_id': session_info['device_id'],
             'timestamp': test_results.get('timestamp'),
@@ -629,36 +602,30 @@ class InteractiveTestSystem:
             self.recorder.run_end()
         
         self.save_session_data()
-        print("✅ Cleanup complete")
+        print("Cleanup complete")
     
     def run(self):
         """Main interactive system loop"""
         try:
             self.print_welcome()
             
-            # Connect instruments
             if not self.connect_instruments():
                 print("ERROR: Cannot proceed without instruments")
                 return
             
             while True:
-                # Setup test session
                 session_info = self.setup_test_session()
                 self.current_session = session_info
                 
-                # Confirm setup
                 if not self.confirm_test_setup(session_info):
                     print("Test cancelled by user")
                     continue
                 
-                # Run test sequence
                 print(f"\nStarting test for device: {session_info['device_id']}")
                 test_results = self.run_test_sequence(session_info)
                 
-                # Show results
                 self.show_test_results(session_info, test_results)
                 
-                # Ask what to do next
                 next_action = self.ask_next_action(session_info)
                 
                 if next_action == "exit":
@@ -671,7 +638,6 @@ class InteractiveTestSystem:
                     continue
                 elif next_action == "continue":
                     print("Continuing with planned runs...")
-                    # Update session for next run
                     session_info['rerun_count'] += 1
                     continue
         

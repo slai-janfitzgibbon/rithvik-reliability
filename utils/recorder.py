@@ -1,4 +1,3 @@
-# utils/recorder.py
 
 import logging
 import matplotlib.pyplot as plt
@@ -12,7 +11,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass
 import warnings
 
-# Suppress a common UserWarning from matplotlib when generating many plots
 warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
 
 
@@ -99,7 +97,6 @@ class UniversalRecorder:
                 df.columns = headers
             return df
         elif isinstance(data, dict):
-            # Handles dicts of scalars or dicts of lists
             return pd.DataFrame([data]) if not all(isinstance(v, (list, tuple)) for v in data.values()) else pd.DataFrame(data)
         elif isinstance(data, (list, tuple)):
             if not data:
@@ -121,12 +118,10 @@ class UniversalRecorder:
         with open(path, 'r', encoding=self.data_config.encoding) as f:
             raw_lines = [line.rstrip('\n') for line in f]
 
-        # Filter out empty lines and comment lines
         lines = [line for line in raw_lines if line.strip() and not line.lstrip().startswith('#')]
         if not lines:
             return pd.DataFrame()
 
-        # Simple header detection
         first_tokens = lines[0].strip().split()
         header_detected = any(not self._is_numeric(token) for token in first_tokens)
         
@@ -141,7 +136,6 @@ class UniversalRecorder:
         if not data_rows:
             return pd.DataFrame()
 
-        # Handle ragged arrays by padding with NaN
         max_cols = max(len(row) for row in data_rows)
         padded_rows = [row + [np.nan] * (max_cols - len(row)) for row in data_rows]
         
@@ -152,7 +146,6 @@ class UniversalRecorder:
         else:
             df.columns = [f"col_{i}" for i in range(max_cols)]
 
-        # Convert columns to numeric where possible
         for col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
@@ -404,7 +397,6 @@ class UniversalRecorder:
             df.to_csv(csv_path, **csv_params)
             logging.info(f'Saved CSV: {csv_path}')
 
-            # Determine x and y columns for plotting
             if df.empty:
                 x_col, y_cols = None, []
             elif testing_variable is None:
@@ -434,7 +426,6 @@ class UniversalRecorder:
                             raise ValueError(f"Dependent variable '{dv}' not found in DataFrame columns.")
                     y_cols.append(y_col)
 
-            # Generate plots
             plot_files = []
             if x_col:
                 for y_col in y_cols:
@@ -457,7 +448,6 @@ class UniversalRecorder:
                             "tab_name": plot_name.replace("_", " ")
                         })
             
-            # Assemble metadata
             metadata = {
                 "test_location": test_info["test_location"],
                 "test_user": test_info["test_user"],
@@ -511,10 +501,8 @@ class UniversalRecorder:
 
 
 if __name__ == "__main__":
-    # This block serves as an example of how to use the UniversalRecorder
     logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
     
-    # Create custom configurations if defaults are not suitable
     data_config = DataConfig(
         auto_detect_types=True,
         handle_missing="interpolate",
@@ -531,14 +519,12 @@ if __name__ == "__main__":
         grid=True
     )
     
-    # Instantiate the recorder
     recorder = UniversalRecorder(
         top_dir='./test_output_demo',
         plot_config=plot_config,
         data_config=data_config
     )
     
-    # Start a test run
     recorder.test_run_start(
         workstation='Autotester2',
         dut_family='SL6', 
@@ -550,10 +536,8 @@ if __name__ == "__main__":
         run_id=1
     )
     
-    # --- Example 1: Recording from a generated numpy array ---
     recorder.phase_start(1, "Numpy_Data_Test")
     
-    # Generate some sample data
     x_np = np.linspace(0, 2 * np.pi, 100)
     y_np = np.sin(x_np) + np.random.normal(0, 0.1, 100)
     numpy_data = np.column_stack([x_np, y_np])
@@ -577,12 +561,9 @@ if __name__ == "__main__":
     
     recorder.phase_end()
     
-    # --- Example 2: Recording from a text file ---
     recorder.phase_start(2, "Text_File_Test")
 
-    # Create a dummy text file for the example
     dummy_txt_content = """# My Test Data File
-# Wavelength (nm)  Power (dBm)
 1549.5  -10.1
 1550.0  -9.8
 1550.5  -9.9
@@ -607,5 +588,4 @@ if __name__ == "__main__":
 
     recorder.phase_end()
     
-    # End the test run
     recorder.run_end()
