@@ -1,6 +1,6 @@
 # FAU Production Test System
 
-Production-ready automated test system for FAU (Fiber Array Unit) devices.
+Automated test system for FAU (Fiber Array Unit) devices.
 
 ## Quick Start
 
@@ -96,17 +96,6 @@ success = test_flow.execute_test_sequence(
     env_info=env_info
 )
 ```
-
-## System Status
-
-✅ **Production Ready**
-- All drivers cleaned and optimized
-- Interactive user interface implemented  
-- Complete test flow automation
-- Data logging and analysis
-- Session management and test history
-- Hardware-specific configuration
-
 ## Files Structure
 
 ```
@@ -136,4 +125,3 @@ For technical support or issues:
 1. Check instrument connections and addresses
 2. Verify COM port for DFB laser (COM3)
 3. Review session logs in `./session_data.json`
-4. Contact system administrator for hardware issues
