@@ -18,8 +18,8 @@ if __name__ == "__main__":
     
     if choice == "2":
         print("\nLaunching direct customer test flow...")
-        from customer_test_flow import run_customer_test
-        success = run_customer_test()
+        from Test_flow import run_test
+        success = run_test()
         sys.exit(0 if success else 1)
     
     elif choice == "3":
