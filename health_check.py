@@ -50,27 +50,27 @@ class InstrumentHealthChecker:
             'instruments': {
                 'SMU1': {
                     'driver': 'smu',
-                    'address': 'TCPIP::10.11.83.58::INSTR',
+                    'address': 'TCPIP::10.11.83.58::5025::SOCKET',
                     'unit_id': 'SMU1',
-                    'timeout': 10.0
+                    'timeout': 20.0
                 },
                 'SMU2': {
                     'driver': 'smu', 
-                    'address': 'TCPIP::10.11.83.60::INSTR',
+                    'address': 'TCPIP::10.11.83.60::5025::SOCKET',
                     'unit_id': 'SMU2',
-                    'timeout': 10.0
+                    'timeout': 20.0
                 },
                 'PSU1': {
                     'driver': 'psu',
-                    'address': 'TCPIP::10.11.83.57::INSTR', 
+                    'address': 'TCPIP::10.11.83.57::9221::SOCKET',
                     'unit_id': 'PSU1',
-                    'timeout': 5.0
+                    'timeout': 20.0
                 },
                 'PSU2': {
                     'driver': 'psu',
-                    'address': 'TCPIP::10.11.83.52::INSTR',
+                    'address': 'TCPIP::10.11.83.52::9221::SOCKET',
                     'unit_id': 'PSU2', 
-                    'timeout': 5.0
+                    'timeout': 20.0
                 },
                 'PM1': {
                     'driver': 'pm',
@@ -87,7 +87,7 @@ class InstrumentHealthChecker:
                 'LASER': {
                     'driver': 'laser',
                     'address': 'COM3',
-                    'timeout': 5.0
+                    'timeout': 20.0
                 }
             },
             'test_parameters': {
