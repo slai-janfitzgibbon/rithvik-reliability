@@ -175,11 +175,11 @@ class UniversalRecorder:
         elif self.data_config.handle_missing == "fill":
             for col in df.columns:
                 if pd.api.types.is_numeric_dtype(df[col]):
-                    df[col].fillna(df[col].mean(), inplace=True)
+                    df[col] = df[col].fillna(df[col].mean())
                 else:
                     mode_val = df[col].mode()
                     fill_val = mode_val.iloc[0] if not mode_val.empty else 'Unknown'
-                    df[col].fillna(fill_val, inplace=True)
+                    df[col] = df[col].fillna(fill_val)
         elif self.data_config.handle_missing == "interpolate":
             for col in df.columns:
                 if pd.api.types.is_numeric_dtype(df[col]):

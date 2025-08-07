@@ -1,6 +1,36 @@
 import serial
 import time
+import numpy as np
+import pandas as pd
+from datetime import datetime
+from typing import List, Dict, Any, Optional
+from dataclasses import dataclass, asdict
 
+@dataclass
+class DFBMeasurement:
+    timestamp: str
+    current_ma: float
+    temperature_actual_c: float
+    temperature_setpoint_c: float
+    wavelength_nm: float
+    estimated_power_mw: float
+    laser_state: int
+    tec_adjustment_c: float
+    laser_on: bool
+    temperature_stable: bool
+    
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+@dataclass 
+class DFBSweepConfig:
+    parameter: str
+    start_value: float
+    stop_value: float
+    steps: int
+    step_delay: float = 1.0
+    stabilization_timeout: float = 30.0
+    stabilization_tolerance: float = 0.1
 
 class DFB13TK:
     
@@ -26,26 +56,20 @@ class DFB13TK:
             return msg
         return response
     
-    # Basic Laser Control
     def laser_on(self):
-        """Turn laser on"""
         self._cmd("laser on")
     
     def laser_off(self):
-        """Turn laser off"""
         self._cmd("laser off")
     
     def get_laser_state(self):
-        """Get current laser state (60=on, 61=off, 62=interlock, 63=fault, 64=unknown, 65=starting)"""
         try:
             state = self._cmd("read_param laser_state")
             return int(state) if state else 61
         except:
             return 61
     
-    # Current Control
     def set_current(self, current_ma):
-        """Set laser current in mA (0-450)"""
         if not 0 <= current_ma <= 450:
             raise ValueError("Current must be 0-450 mA")
         amps = current_ma / 1000.0
@@ -53,7 +77,6 @@ class DFB13TK:
         self._current_ma = current_ma
     
     def get_current(self):
-        """Get laser current in mA"""
         try:
             current_str = self._cmd("read_param laser.current")
             if current_str:
@@ -62,7 +85,6 @@ class DFB13TK:
             pass
         return self._current_ma
     
-    # Temperature Control
     def set_temperature(self, temp_c):
         if not 15 <= temp_c <= 35:
             raise ValueError("Temperature must be 15-35°C")
@@ -129,16 +151,12 @@ class DFB13TK:
         except:
             return 0.0
     
-    # Wavelength and Power Calculations (from PDF specs)
     def calculate_wavelength(self, current_ma=None, temp_c=None):
-        """Calculate wavelength based on current and temperature tuning coefficients"""
         if current_ma is None:
             current_ma = self.get_current()
         if temp_c is None:
             temp_c = self.get_temperature()
         
-        # From PDF: Current tuning coefficient = 0.003 nm/mA, Temperature = 0.08 nm/°C
-        # Assume center wavelength 1310 nm at 200 mA, 25°C (middle of 1305-1315 nm range)
         base_wavelength = 1310.0
         base_current = 200.0
         base_temp = 25.0
@@ -149,11 +167,9 @@ class DFB13TK:
         return base_wavelength + current_shift + temp_shift
     
     def calculate_power(self, current_ma=None):
-        """Calculate estimated output power based on slope efficiency"""
         if current_ma is None:
             current_ma = self.get_current()
         
-        # From PDF: Slope efficiency = 0.27 W/A, Threshold ~15 mA
         threshold_ma = 15.0
         slope_efficiency_w_per_a = 0.27
         
@@ -161,62 +177,45 @@ class DFB13TK:
             return 0.0
         
         power_w = (current_ma - threshold_ma) / 1000.0 * slope_efficiency_w_per_a
-        return power_w * 1000.0  # Convert to mW
+        return power_w * 1000.0
     
-    # Device Information
     def get_firmware_version(self):
-        """Get firmware version"""
         return self._cmd("firmware_version")
     
     def get_serial_number(self):
-        """Get module serial number"""
         return self._cmd("read_string module_sn")
     
     def get_laser_serial(self):
-        """Get laser serial number"""
         return self._cmd("read_string laser_sn")
     
     def get_oem_string(self):
-        """Get OEM string"""
         return self._cmd("read_string oem")
     
     def get_main_board_serial(self):
-        """Get main board serial number"""
         return self._cmd("read_string main_board_sn")
     
     def get_clock(self):
-        """Get system clock"""
         return self._cmd("get_clock")
     
-    # Configuration Management
     def save_config(self):
-        """Save all parameters to non-volatile memory"""
         self._cmd("savecfg")
     
     def save_parameter(self, tag):
-        """Save specific parameter to EEPROM"""
         self._cmd(f"save_param {tag}")
     
     def read_parameter(self, tag):
-        """Read any parameter by tag"""
         return self._cmd(f"read_param {tag}")
     
     def write_parameter(self, tag, value):
-        """Write any parameter by tag"""
         self._cmd(f"write_param {tag} {value}")
     
-    # System Control
     def reset_system(self):
-        """Reset system (drops USB connection)"""
         self._cmd("reset")
     
     def enter_update_mode(self):
-        """Enter firmware update mode"""
         self._cmd("update")
     
-    # Status and Monitoring
     def get_status(self):
-        """Get comprehensive status dictionary"""
         current_ma = self.get_current()
         temp_actual = self.get_temperature()
         temp_setpoint = self.get_temperature_setpoint()
@@ -372,102 +371,267 @@ class DFB13TK:
             pass
         self.close()
 
+    # Enhanced measurement capabilities for recorder integration
+    def measure_all(self) -> DFBMeasurement:
+        """Take comprehensive measurement of all laser parameters"""
+        timestamp = datetime.now().isoformat()
+        
+        current_ma = self.get_current()
+        temp_actual = self.get_temperature()
+        temp_setpoint = self.get_temperature_setpoint()
+        wavelength_nm = self.calculate_wavelength(current_ma, temp_actual)
+        power_mw = self.calculate_power(current_ma)
+        laser_state = self.get_laser_state()
+        tec_adj = self.get_tec_adjustment()
+        laser_on = laser_state == 60  # 60 = laser on state
+        
+        # Check temperature stability
+        temp_stable = abs(temp_actual - temp_setpoint) <= 0.1
+        
+        measurement = DFBMeasurement(
+            timestamp=timestamp,
+            current_ma=current_ma,
+            temperature_actual_c=temp_actual,
+            temperature_setpoint_c=temp_setpoint,
+            wavelength_nm=wavelength_nm,
+            estimated_power_mw=power_mw,
+            laser_state=laser_state,
+            tec_adjustment_c=tec_adj,
+            laser_on=laser_on,
+            temperature_stable=temp_stable
+        )
+        
+        return measurement
 
-# Test all functions
-def test_dfb13tk():
-    """Test all DFB13TK functions"""
-    print("DFB13TK Complete Driver Test")
-    print("=" * 40)
-    
-    with DFB13TK() as laser:
-        # Device information
-        print("Device Information:")
-        info = laser.get_device_info()
-        for key, value in info.items():
-            if value:
-                print(f"  {key}: {value}")
+    def current_sweep(self, config: DFBSweepConfig) -> pd.DataFrame:
+        """
+        Perform current sweep with comprehensive data collection
         
-        # Specifications
-        print("\nSpecifications loaded:")
-        specs = laser.get_specifications()
-        print(f"  Wavelength range: {specs['center_wavelength_nm']['min']}-{specs['center_wavelength_nm']['max']} nm")
-        print(f"  Current tuning: {specs['current_tuning_nm_per_ma']['typical']} nm/mA")
-        print(f"  Temperature tuning: {specs['temp_tuning_nm_per_c']['typical']} nm/°C")
+        Returns:
+            DataFrame ready for recorder.record_complete_dataset()
+        """
+        if config.parameter != 'current':
+            raise ValueError("Use current_sweep for current parameter sweeps")
+            
+        print(f"Starting DFB current sweep: {config.start_value}mA to {config.stop_value}mA, {config.steps} steps")
         
-        # Current control
-        print("\nCurrent Control Test:")
-        laser.set_current(180)
-        current = laser.get_current()
-        print(f"  Set 180 mA, read: {current:.1f} mA")
+        if not config.start_value <= config.stop_value:
+            raise ValueError("Start value must be <= stop value")
+        if not 0 <= config.start_value <= 450 or not 0 <= config.stop_value <= 450:
+            raise ValueError("Current must be 0-450 mA")
         
-        # Temperature control  
-        print("\nTemperature Control Test:")
-        laser.set_temperature(25.0)
-        temp_set = laser.get_temperature_setpoint()
-        temp_actual = laser.get_temperature()
-        print(f"  Setpoint: {temp_set:.1f}°C, Actual: {temp_actual:.1f}°C")
+        current_points = np.linspace(config.start_value, config.stop_value, config.steps)
+        measurements = []
         
-        # Calculations
-        print("\nCalculations:")
-        wavelength = laser.calculate_wavelength()
-        power = laser.calculate_power()
-        print(f"  Estimated wavelength: {wavelength:.3f} nm")
-        print(f"  Estimated power: {power:.1f} mW")
+        # Ensure laser is on for measurements
+        self.laser_on()
+        time.sleep(1.0)
         
-        # TEC adjustment
-        print("\nTEC Adjustment Test:")
-        laser.enable_tec_adjustment()
-        laser.set_tec_adjustment_range(0.5)
-        tec_range = laser.get_tec_adjustment_range()
-        tec_adj = laser.get_tec_adjustment()
-        print(f"  TEC range: ±{tec_range:.1f}°C")
-        print(f"  Current adjustment: {tec_adj:.2f}°C")
-        laser.disable_tec_adjustment()
+        try:
+            for i, current_ma in enumerate(current_points):
+                self.set_current(current_ma)
+                time.sleep(config.step_delay)
+                
+                # Wait for stabilization if needed
+                start_time = time.time()
+                while time.time() - start_time < config.stabilization_timeout:
+                    measurement = self.measure_all()
+                    if measurement.temperature_stable:
+                        break
+                    time.sleep(0.5)
+                else:
+                    # Final measurement even if not fully stable
+                    measurement = self.measure_all()
+                
+                measurements.append(measurement)
+                print(f"Step {i+1}/{config.steps}: I={current_ma:.1f}mA -> λ={measurement.wavelength_nm:.3f}nm, P={measurement.estimated_power_mw:.2f}mW")
+                
+        finally:
+            # Return to safe state
+            self.set_current(150.0)  # Safe operating current
         
-        # Mode-hop-free check
-        print("\nMode-Hop-Free Range Check:")
-        mhf = laser.get_mode_hop_free_range()
-        print(f"  In range: {mhf['in_range']}")
-        print(f"  Current: {mhf['current_ma']:.1f} mA (OK: {mhf['current_ok']})")
-        print(f"  Power: {mhf['power_mw']:.1f} mW (OK: {mhf['power_ok']})")
+        # Convert to DataFrame
+        df = pd.DataFrame([m.to_dict() for m in measurements])
+        df['unit_id'] = 'DFB_LASER'
+        df['sweep_type'] = 'current'
+        df['step_number'] = range(1, len(df) + 1)
         
-        # Tuning ranges
-        print("\nAvailable Tuning Ranges:")
-        tuning = laser.calculate_tuning_range()
-        print(f"  Current tuning: ±{tuning['current_tuning_range_nm']:.3f} nm")
-        print(f"  Temperature tuning: ±{tuning['temperature_tuning_range_nm']:.3f} nm")
-        print(f"  Total range: ±{tuning['total_range_nm']:.3f} nm")
+        # Add derived parameters useful for analysis
+        df['wavelength_shift_nm'] = df['wavelength_nm'] - df['wavelength_nm'].iloc[0]
+        df['power_efficiency_mw_per_ma'] = df['estimated_power_mw'] / df['current_ma']
+        df['temp_error_c'] = df['temperature_actual_c'] - df['temperature_setpoint_c']
         
-        # Wavelength tuning test
-        print("\nWavelength Tuning Test:")
-        original_wavelength = laser.calculate_wavelength()
-        target_wavelength = original_wavelength + 0.1  # +0.1 nm
+        return df
+
+    def temperature_sweep(self, config: DFBSweepConfig) -> pd.DataFrame:
+        """
+        Perform temperature sweep with comprehensive data collection
         
-        if laser.tune_wavelength_by_current(target_wavelength):
-            new_wavelength = laser.calculate_wavelength()
-            print(f"  Tuned from {original_wavelength:.3f} to {new_wavelength:.3f} nm using current")
-        else:
-            print("  Current tuning out of range")
+        Returns:
+            DataFrame ready for recorder.record_complete_dataset()
+        """
+        if config.parameter != 'temperature':
+            raise ValueError("Use temperature_sweep for temperature parameter sweeps")
+            
+        print(f"Starting DFB temperature sweep: {config.start_value}°C to {config.stop_value}°C, {config.steps} steps")
         
-        # Status summary
-        print("\nFinal Status:")
-        status = laser.get_status()
-        for key, value in status.items():
-            if isinstance(value, float):
-                print(f"  {key}: {value:.2f}")
-            else:
-                print(f"  {key}: {value}")
+        if not 15 <= config.start_value <= 35 or not 15 <= config.stop_value <= 35:
+            raise ValueError("Temperature must be 15-35°C")
         
-        # Modulation specs
-        print("\nModulation Specifications:")
-        mod_specs = laser.get_modulation_specs()
-        for port, specs in mod_specs.items():
-            print(f"  {port}:")
-            for param, value in specs.items():
-                print(f"    {param}: {value}")
+        temp_points = np.linspace(config.start_value, config.stop_value, config.steps)
+        measurements = []
         
-        print("\nAll tests completed successfully")
+        # Ensure laser is on for measurements
+        self.laser_on()
+        time.sleep(1.0)
+        
+        try:
+            for i, temp_c in enumerate(temp_points):
+                self.set_temperature(temp_c)
+                print(f"Step {i+1}/{config.steps}: Setting T={temp_c:.2f}°C, waiting for stabilization...")
+                
+                # Wait for temperature stabilization
+                if not self.wait_temperature_stable(
+                    tolerance=config.stabilization_tolerance,
+                    timeout=config.stabilization_timeout
+                ):
+                    print(f"  Warning: Temperature may not be fully stable")
+                
+                time.sleep(config.step_delay)
+                measurement = self.measure_all()
+                measurements.append(measurement)
+                
+                print(f"  Result: T={measurement.temperature_actual_c:.2f}°C -> λ={measurement.wavelength_nm:.3f}nm, P={measurement.estimated_power_mw:.2f}mW")
+                
+        finally:
+            # Return to safe state  
+            self.set_temperature(25.0)  # Safe operating temperature
+        
+        # Convert to DataFrame
+        df = pd.DataFrame([m.to_dict() for m in measurements])
+        df['unit_id'] = 'DFB_LASER'
+        df['sweep_type'] = 'temperature'
+        df['step_number'] = range(1, len(df) + 1)
+        
+        # Add derived parameters
+        df['wavelength_shift_nm'] = df['wavelength_nm'] - df['wavelength_nm'].iloc[0]
+        df['temp_tuning_nm_per_c'] = np.gradient(df['wavelength_nm']) / np.gradient(df['temperature_actual_c'])
+        df['temp_error_c'] = df['temperature_actual_c'] - df['temperature_setpoint_c']
+        
+        return df
+
+    def wavelength_characterization(self, current_range=(100, 400), current_steps=20,
+                                   temp_range=(20, 30), temp_steps=6) -> pd.DataFrame:
+        """
+        Complete wavelength characterization across current and temperature
+        
+        Returns:
+            Combined DataFrame ready for recorder
+        """
+        print("Starting complete DFB wavelength characterization")
+        
+        # Current sweep at fixed temperature
+        current_config = DFBSweepConfig(
+            parameter='current',
+            start_value=current_range[0],
+            stop_value=current_range[1],
+            steps=current_steps,
+            step_delay=0.5,
+            stabilization_timeout=10.0
+        )
+        
+        # Set fixed temperature for current sweep
+        self.set_temperature(25.0)  # Middle of range
+        self.wait_temperature_stable(timeout=30)
+        
+        current_sweep_data = self.current_sweep(current_config)
+        time.sleep(2.0)  # Brief pause between sweeps
+        
+        # Temperature sweep at fixed current
+        temp_config = DFBSweepConfig(
+            parameter='temperature',
+            start_value=temp_range[0],
+            stop_value=temp_range[1],
+            steps=temp_steps,
+            step_delay=2.0,
+            stabilization_timeout=45.0,
+            stabilization_tolerance=0.1
+        )
+        
+        # Set fixed current for temperature sweep
+        self.set_current(200.0)  # Middle of range
+        time.sleep(1.0)
+        
+        temp_sweep_data = self.temperature_sweep(temp_config)
+        
+        # Combine data
+        combined_df = pd.concat([current_sweep_data, temp_sweep_data], ignore_index=True)
+        combined_df['characterization_type'] = 'wavelength_complete'
+        
+        return combined_df
+
+    def power_vs_current_characterization(self, current_range=(50, 450), steps=25) -> pd.DataFrame:
+        """
+        Characterize power vs current relationship
+        
+        Returns:
+            DataFrame ready for recorder
+        """
+        print("Starting DFB power vs current characterization")
+        
+        config = DFBSweepConfig(
+            parameter='current',
+            start_value=current_range[0],
+            stop_value=current_range[1],
+            steps=steps,
+            step_delay=0.5,
+            stabilization_timeout=10.0
+        )
+        
+        # Set optimal temperature
+        self.set_temperature(25.0)
+        self.wait_temperature_stable(timeout=30)
+        
+        power_data = self.current_sweep(config)
+        power_data['characterization_type'] = 'power_vs_current'
+        
+        # Add power analysis
+        threshold_current = 15.0  # From specs
+        above_threshold = power_data['current_ma'] > threshold_current
+        
+        if above_threshold.any():
+            # Calculate slope efficiency from linear region
+            linear_region = power_data[above_threshold]
+            if len(linear_region) > 3:
+                slope_eff = np.polyfit(linear_region['current_ma'], linear_region['estimated_power_mw'], 1)[0]
+                power_data['calculated_slope_efficiency_mw_per_ma'] = slope_eff
+        
+        return power_data
+
+    def get_recorder_ready_data(self, measurements: List[DFBMeasurement] = None) -> pd.DataFrame:
+        """
+        Convert measurements to recorder-ready DataFrame format
+        
+        Args:
+            measurements: Optional list of measurements
+            
+        Returns:
+            DataFrame formatted for recorder.record_complete_dataset()
+        """
+        if measurements is None:
+            # Take a single current measurement
+            measurement = self.measure_all()
+            measurements = [measurement]
+            
+        df = pd.DataFrame([m.to_dict() for m in measurements])
+        df['unit_id'] = 'DFB_LASER'
+        
+        # Add derived columns useful for analysis
+        df['wavelength_shift_nm'] = df['wavelength_nm'] - df['wavelength_nm'].iloc[0]
+        df['power_efficiency_mw_per_ma'] = df['estimated_power_mw'] / df['current_ma']
+        df['temp_error_c'] = df['temperature_actual_c'] - df['temperature_setpoint_c']
+        df['measurement_index'] = range(len(df))
+        
+        return df
 
 
-if __name__ == "__main__":
-    test_dfb13tk()

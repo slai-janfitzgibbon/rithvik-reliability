@@ -3,9 +3,9 @@ import numpy as np
 import pandas as pd
 import logging
 
-from drivers.tti_ql355tp import TTi_QL355TP
-from drivers.aim_smu4000 import AimTTi_SMU4000
-from drivers.thorlabs_pm import Thorlabs_PMxxx
+from drivers.tti_qlp355 import TTi_QL355TP
+from drivers.smu import AimTTi_SMU4000
+from drivers.pm101 import ThorlabsPowerMeter as Thorlabs_PMxxx
 from utils.recorder import UniversalRecorder, PlotConfig, DataConfig
 
 PSU_VISA_ADDRESS = 'USB0::0x103E::0x0109::...::INSTR'
