@@ -22,7 +22,7 @@ python run_test.py
 
 **Options:**
 1. Interactive Test System (Recommended for operators)
-2. Direct Customer Test Flow (Preset parameters)
+2. Direct Test Flow (Preset parameters)
 3. Exit
 
 #### `interactive_test_system.py` - Interactive Test Interface
